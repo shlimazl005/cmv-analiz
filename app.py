@@ -1,136 +1,145 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import pandas as pd
 
-# Sayfa Ayarları
-st.set_page_config(page_title="CMV Üveit Analiz Paneli", layout="wide")
+# ---------------------------------------------------------
+# 1. AYARLAR VE STİL (Brocan'ın Özel Prism Stili)
+# ---------------------------------------------------------
+sns.set_style("ticks")
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans']
+plt.rcParams['axes.linewidth'] = 1.5
 
-# Başlık ve Giriş
-st.title("🔬 CMV Ön Üveit İmmünolojik Analiz Paneli")
-st.markdown("""
-Bu panel, **Sağlıklı (CMV-/+)** ve **CMV Üveit (Vaka)** grupları arasındaki immünolojik farkları 
-(özellikle **CTLA-4, PD-1 ve NKG2A** ekspresyonlarını) interaktif olarak incelemek için hazırlanmıştır.
-""")
-
-# Yan Menü (Sidebar)
-st.sidebar.header("⚙️ Grafik Ayarları")
-n_samples = st.sidebar.slider("Örneklem Sayısı (Simülasyon)", 5, 50, 11)
-show_points = st.sidebar.checkbox("Bireysel Veri Noktalarını Göster (Jitter)", value=True)
-
-# Veri Üretme Fonksiyonu (Senin tezindeki ortalamalarla)
-def generate_data(mean, sd, n):
-    np.random.seed(42) # Sabit sonuç için
-    data = np.random.normal(mean, sd, n)
-    return np.clip(data, 0, None) # Negatif değer olamaz
-
-# --- VERİLERİN HAZIRLANMASI ---
-# Gruplar: CMV (-), CMV (+), Vaka
+# Renk Paleti (PDF'teki mantığa uygun: Gri -> Açık Mavi -> Koyu Lacivert)
+prism_palette = ["#E0E0E0", "#90CAF9", "#0D47A1"] 
 groups = ['CMV (-)', 'CMV (+)', 'Vaka Grubu']
+n_samples = 11  # Her gruptaki kişi sayısı
 
-# 1. CD56dim CTLA-4
-df1 = pd.DataFrame({
-    'Grup': groups * n_samples,
-    'Değer': np.concatenate([
-        generate_data(0.63, 0.67, n_samples),
-        generate_data(0.72, 0.58, n_samples),
-        generate_data(2.05, 1.51, n_samples)
-    ]),
-    'Belirteç': 'CD56dim CTLA-4+'
-})
+# ---------------------------------------------------------
+# 2. VERİ ÜRETME MOTORU (Simülasyon)
+# ---------------------------------------------------------
+def generate_data(mean, sd, n=11):
+    """Ortalama ve Standart Sapma'dan sentetik veri üretir."""
+    data = np.random.normal(mean, sd, n)
+    return np.clip(data, 0, None) # Biyolojik veri negatif olamaz
 
-# 2. CD56bright CTLA-4
-df2 = pd.DataFrame({
-    'Grup': groups * n_samples,
-    'Değer': np.concatenate([
-        generate_data(6.4, 4.0, n_samples),
-        generate_data(3.8, 2.4, n_samples),
-        generate_data(8.5, 4.4, n_samples)
-    ]),
-    'Belirteç': 'CD56bright CTLA-4+'
-})
+# PDF'teki Tablolardan Çekilen Veriler (Mean, SD)
+data_map = {
+    # --- GRUP 1: GENEL LENFOSİT & NK (Tablo 2) ---
+    "Lenfosit Kapısı CD3+ T Hücre": [
+        (74.0, 4.3), (73.9, 5.6), (67.3, 12.4)
+    ],
+    "Lenfosit Kapısı NK Hücre Oranı": [
+        (9.9, 4.2), (11.3, 5.0), (11.2, 7.7)
+    ],
+    "CD3- Total NK Hücre Oranı": [
+        (43.9, 14.0), (47.6, 15.5), (49.5, 17.9)
+    ],
+    
+    # --- GRUP 2: CD56dim CD16+ (SİTOTOKSİK) (Tablo 3) ---
+    "CD56dim Sitotoksik NK Alt Grubu": [
+        (86.0, 6.5), (81.0, 22.0), (77.4, 24.4)
+    ],
+    "CD56dim PD1+": [
+        (1.00, 0.96), (5.11, 11.17), (4.20, 4.74)
+    ],
+    "CD56dim CTLA-4+": [
+        (0.63, 0.67), (0.72, 0.58), (2.05, 1.51) # ANLAMLI
+    ],
+    "CD56dim NKG2A": [
+        (49.3, 10.2), (36.1, 18.9), (34.3, 16.7) # ANLAMLI (Pairwise)
+    ],
+    "CD56dim NKG2D": [
+        (1.40, 1.04), (0.85, 0.68), (1.07, 0.78)
+    ],
+    "CD56dim LAG3": [
+        (0.94, 1.00), (0.54, 0.86), (1.15, 1.74)
+    ],
 
-# 3. CD56dim NKG2A
-df3 = pd.DataFrame({
-    'Grup': groups * n_samples,
-    'Değer': np.concatenate([
-        generate_data(49.3, 10.2, n_samples),
-        generate_data(36.1, 18.9, n_samples),
-        generate_data(34.3, 16.7, n_samples)
-    ]),
-    'Belirteç': 'CD56dim NKG2A+'
-})
-
-# 4. Total NK Oranı
-df4 = pd.DataFrame({
-    'Grup': groups * n_samples,
-    'Değer': np.concatenate([
-        generate_data(9.9, 4.2, n_samples),
-        generate_data(11.3, 5.0, n_samples),
-        generate_data(11.2, 7.7, n_samples)
-    ]),
-    'Belirteç': 'Total NK Hücre Oranı'
-})
-
-datasets = [df1, df2, df3, df4]
-titles = [
-    "CD56dim CTLA-4+ (Vaka Grubunda Artış)", 
-    "CD56bright CTLA-4+ (Vaka Grubunda Artış)", 
-    "CD56dim NKG2A+ (Vaka Grubunda Azalış)", 
-    "Total NK Hücre Oranı (Fark Yok)"
-]
-# P değerlerini manuel ekleyelim (Görsel üstüne)
-p_infos = [
-    "p=0.020 (vs CMV-)\np=0.045 (vs CMV+)",
-    "p=0.005 (vs CMV+)",
-    "p=0.028 (vs CMV-)",
-    "Anlamlı Fark Yok"
-]
-
-# --- GRAFİKLERİN ÇİZİLMESİ ---
-st.subheader("📊 Karşılaştırmalı Analiz Grafikleri")
-
-row1_col1, row1_col2 = st.columns(2)
-row2_col1, row2_col2 = st.columns(2)
-cols = [row1_col1, row1_col2, row2_col1, row2_col2]
-
-prism_palette = ["#E0E0E0", "#90CAF9", "#1565C0"]
-
-for i, col in enumerate(cols):
-    with col:
-        fig, ax = plt.subplots(figsize=(6, 5))
-        
-        # Boxplot
-        sns.boxplot(x="Grup", y="Değer", data=datasets[i], ax=ax, 
-                    palette=prism_palette, width=0.5, linewidth=1.5, showfliers=False)
-        
-        # Jitter (Noktalar)
-        if show_points:
-            sns.stripplot(x="Grup", y="Değer", data=datasets[i], ax=ax, 
-                          color="black", size=5, jitter=0.15, alpha=0.7)
-        
-        # Süslemeler
-        ax.set_title(titles[i], fontweight='bold', fontsize=10)
-        ax.set_ylabel("% Ekspresyon")
-        ax.set_xlabel("")
-        sns.despine()
-        
-        # P değeri notu
-        y_max = datasets[i]['Değer'].max()
-        ax.text(1, y_max*1.05, p_infos[i], ha='center', va='bottom', fontsize=9, color='red')
-        
-        st.pyplot(fig)
-
-# Tablo Görünümü
-st.subheader("📋 Özet İstatistik Tablosu")
-st.info("Bu veriler tezinizdeki tablolardan alınmıştır.")
-
-summary_data = {
-    'Parametre': ['CD56dim CTLA-4', 'CD56bright CTLA-4', 'CD56dim NKG2A', 'Total NK Oranı'],
-    'CMV (-) Ort.±SS': ['0.63 ± 0.67', '6.4 ± 4.0', '49.3 ± 10.2', '9.9 ± 4.2'],
-    'CMV (+) Ort.±SS': ['0.72 ± 0.58', '3.8 ± 2.4', '36.1 ± 18.9', '11.3 ± 5.0'],
-    'Vaka Grubu Ort.±SS': ['2.05 ± 1.51', '8.5 ± 4.4', '34.3 ± 16.7', '11.2 ± 7.7'],
-    'P Değeri (Genel)': ['0.036*', '0.020*', '0.660', '0.821']
+    # --- GRUP 3: CD56bright CD16- (SİTOKİN ÜRETEN) (Tablo 4) ---
+    "CD56bright Sitokin Üreten NK": [
+        (12.9, 6.4), (16.7, 22.3), (20.2, 23.6)
+    ],
+    "CD56bright PD1": [
+        (3.0, 2.9), (10.2, 20.0), (8.5, 6.7) # ANLAMLI (Pairwise)
+    ],
+    "CD56bright CTLA-4": [
+        (6.4, 4.0), (3.8, 2.4), (8.5, 4.4) # ANLAMLI
+    ],
+    "CD56bright NKG2A": [
+        (80.3, 14.6), (69.1, 27.9), (61.9, 23.0)
+    ],
+    "CD56bright NKG2D": [
+        (2.6, 1.5), (4.2, 2.3), (3.0, 2.1)
+    ],
+    "CD56bright LAG3": [
+        (2.6, 1.9), (1.3, 1.4), (1.6, 1.4)
+    ]
 }
-st.table(pd.DataFrame(summary_data))
+
+# ---------------------------------------------------------
+# 3. ÇİZİM FONKSİYONU
+# ---------------------------------------------------------
+def create_comprehensive_plot():
+    # 5 Satır x 3 Sütunluk dev bir grid (Toplam 15 Grafik)
+    fig, axes = plt.subplots(5, 3, figsize=(18, 25))
+    axes = axes.flatten()
+    
+    # Her bir değişken için döngü
+    for i, (title, stats) in enumerate(data_map.items()):
+        ax = axes[i]
+        
+        # Veri Setini Oluştur
+        g1 = generate_data(*stats[0], n_samples)
+        g2 = generate_data(*stats[1], n_samples)
+        g3 = generate_data(*stats[2], n_samples)
+        
+        df = pd.DataFrame({
+            'Grup': groups * n_samples,
+            'Değer': np.concatenate([g1, g2, g3])
+        })
+        
+        # 1. Boxplot (Kutu)
+        sns.boxplot(x="Grup", y="Değer", data=df, ax=ax, 
+                    palette=prism_palette, width=0.5, linewidth=1.5, 
+                    showfliers=False, whis=1.5)
+        
+        # 2. Stripplot (Noktalar)
+        sns.stripplot(x="Grup", y="Değer", data=df, ax=ax, 
+                      color="black", size=5, jitter=0.15, alpha=0.6)
+        
+        # Tasarım Ayarları
+        ax.set_title(title, fontweight='bold', fontsize=11, pad=10)
+        ax.set_ylabel("% Ekspresyon" if i % 3 == 0 else "") # Sadece sol baştakilere label
+        ax.set_xlabel("")
+        sns.despine(ax=ax, trim=True) # Çerçeveleri temizle
+        
+        # --- ÖZEL ANLAMLILIK İŞARETLERİ (Manual Annotation) ---
+        # CD56dim CTLA-4 (Index 5)
+        if "CD56dim CTLA-4+" in title:
+            y_max = df['Değer'].max()
+            # CMV- vs Vaka
+            ax.plot([0, 0, 2, 2], [y_max+0.5, y_max+1, y_max+1, y_max+0.5], lw=1.5, c='k')
+            ax.text(1, y_max+1.2, "* p=0.036", ha='center', fontsize=9, fontweight='bold')
+
+        # CD56bright CTLA-4 (Index 11)
+        if "CD56bright CTLA-4" in title:
+            y_max = df['Değer'].max()
+            # CMV+ vs Vaka (Büyük fark buradaydı)
+            ax.plot([1, 1, 2, 2], [y_max+1, y_max+2, y_max+2, y_max+1], lw=1.5, c='k')
+            ax.text(1.5, y_max+2.5, "* p=0.020", ha='center', fontsize=9, fontweight='bold')
+            
+        # CD56dim NKG2A (Index 6)
+        if "CD56dim NKG2A" in title:
+             y_max = df['Değer'].max()
+             # CMV- vs Vaka (Düşüş)
+             ax.plot([0, 0, 2, 2], [y_max+2, y_max+5, y_max+5, y_max+2], lw=1.5, c='k')
+             ax.text(1, y_max+6, "* p<0.05", ha='center', fontsize=9)
+
+    plt.tight_layout()
+    plt.show()
+
+# Kodu Çalıştır
+np.random.seed(42) # Her seferinde aynı güzel sonuç çıksın
+create_comprehensive_plot()
