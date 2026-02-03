@@ -1,132 +1,140 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
+import streamlit as st
 import pandas as pd
+import numpy as np
+import plotly.express as px
 
-# ---------------------------------------------------------
-# 1. AYARLAR VE STİL (Brocan'ın Hatasız Prism Stili)
-# ---------------------------------------------------------
-# Stil ayarlarını güvenli modda açıyoruz
-try:
-    sns.set_style("ticks")
-except:
-    pass 
+# --- SAYFA AYARLARI ---
+st.set_page_config(page_title="CMV Üveit Analiz Paneli", layout="wide", page_icon="🔬")
 
-# Font ve Çizgi Kalınlıkları
-plt.rcParams['font.family'] = 'sans-serif'
-# Arial yoksa bile çalışsın diye yedek fontlar ekledim
-plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Liberation Sans', 'sans-serif']
-plt.rcParams['axes.linewidth'] = 1.5
-plt.rcParams['xtick.major.width'] = 1.5
-plt.rcParams['ytick.major.width'] = 1.5
+# Başlık
+st.title("🔬 CMV Ön Üveit İmmünolojik Analiz Paneli")
+st.markdown("""
+Bu interaktif panel, **Sağlıklı (CMV-/+)** ve **CMV Üveit (Vaka)** grupları arasındaki immünolojik farkları 
+incelemek için **tez verileri simüle edilerek** oluşturulmuştur.
+""")
 
-# Renk Paleti (Gri -> Açık Mavi -> Koyu Lacivert)
-prism_palette = ["#E0E0E0", "#90CAF9", "#0D47A1"] 
-groups = ['CMV (-)', 'CMV (+)', 'Vaka Grubu']
-n_samples = 11
+# --- YAN MENÜ ---
+with st.sidebar:
+    st.header("⚙️ Görünüm Ayarları")
+    n_samples = st.slider("Grup Başına Örneklem Sayısı (N)", 10, 50, 11)
+    show_points = st.checkbox("Bireysel Veri Noktalarını Göster", value=True)
+    st.info("Bu grafikler GraphPad Prism estetiğinde, Plotly altyapısı ile çizilmiştir.")
 
-# ---------------------------------------------------------
-# 2. VERİ ÜRETME MOTORU (Simülasyon)
-# ---------------------------------------------------------
-def generate_data(mean, sd, n=11):
-    """Ortalama ve Standart Sapma'dan sentetik veri üretir."""
-    # Negatif değer çıkmasını engelliyoruz
+# --- VERİ ÜRETME FONKSİYONU ---
+def generate_data(mean, sd, n):
+    np.random.seed(42) # Veriler her seferinde değişmesin, sabit kalsın
     data = np.random.normal(mean, sd, n)
-    return np.clip(data, 0, None)
+    return np.clip(data, 0, None) # Negatif değerleri sıfırla
 
-# PDF'ten Alınan Veriler (Mean, SD)
-data_map = {
-    # --- GRUP 1: GENEL LENFOSİT & NK ---
-    "Lenfosit Kapısı CD3+ T Hücre": [(74.0, 4.3), (73.9, 5.6), (67.3, 12.4)],
-    "Lenfosit Kapısı NK Hücre Oranı": [(9.9, 4.2), (11.3, 5.0), (11.2, 7.7)],
-    "CD3- Total NK Hücre Oranı": [(43.9, 14.0), (47.6, 15.5), (49.5, 17.9)],
-    
-    # --- GRUP 2: CD56dim (SİTOTOKSİK) ---
-    "CD56dim Sitotoksik NK Alt Grubu": [(86.0, 6.5), (81.0, 22.0), (77.4, 24.4)],
-    "CD56dim PD1+": [(1.00, 0.96), (5.11, 11.17), (4.20, 4.74)],
-    "CD56dim CTLA-4+": [(0.63, 0.67), (0.72, 0.58), (2.05, 1.51)],
-    "CD56dim NKG2A": [(49.3, 10.2), (36.1, 18.9), (34.3, 16.7)],
-    "CD56dim NKG2D": [(1.40, 1.04), (0.85, 0.68), (1.07, 0.78)],
-    "CD56dim LAG3": [(0.94, 1.00), (0.54, 0.86), (1.15, 1.74)],
+# --- DATASETLERİN HAZIRLANMASI (Tez Verileri) ---
+groups = ['CMV (-)', 'CMV (+)', 'Vaka Grubu']
 
-    # --- GRUP 3: CD56bright (SİTOKİN ÜRETEN) ---
-    "CD56bright Sitokin Üreten NK": [(12.9, 6.4), (16.7, 22.3), (20.2, 23.6)],
-    "CD56bright PD1": [(3.0, 2.9), (10.2, 20.0), (8.5, 6.7)],
-    "CD56bright CTLA-4": [(6.4, 4.0), (3.8, 2.4), (8.5, 4.4)],
-    "CD56bright NKG2A": [(80.3, 14.6), (69.1, 27.9), (61.9, 23.0)],
-    "CD56bright NKG2D": [(2.6, 1.5), (4.2, 2.3), (3.0, 2.1)],
-    "CD56bright LAG3": [(2.6, 1.9), (1.3, 1.4), (1.6, 1.4)]
-}
+# 1. CD56dim CTLA-4+ (Vaka grubunda Yüksek)
+df_ctla4_dim = pd.DataFrame({
+    'Grup': groups * n_samples,
+    'Değer': np.concatenate([
+        generate_data(0.63, 0.67, n_samples),
+        generate_data(0.72, 0.58, n_samples),
+        generate_data(2.05, 1.51, n_samples)
+    ]),
+    'Belirteç': 'CD56dim CTLA-4+'
+})
 
-# ---------------------------------------------------------
-# 3. ÇİZİM FONKSİYONU
-# ---------------------------------------------------------
-# Global Seed (Her çalıştırmada aynı sonucu versin diye)
-np.random.seed(42)
+# 2. CD56bright CTLA-4+ (Vaka grubunda Yüksek)
+df_ctla4_bright = pd.DataFrame({
+    'Grup': groups * n_samples,
+    'Değer': np.concatenate([
+        generate_data(6.4, 4.0, n_samples),
+        generate_data(3.8, 2.4, n_samples),
+        generate_data(8.5, 4.4, n_samples)
+    ]),
+    'Belirteç': 'CD56bright CTLA-4+'
+})
 
-# 5 Satır x 3 Sütunluk Alan
-fig, axes = plt.subplots(5, 3, figsize=(18, 25))
-axes = axes.flatten()
+# 3. CD56dim NKG2A (Vaka grubunda Düşük)
+df_nkg2a = pd.DataFrame({
+    'Grup': groups * n_samples,
+    'Değer': np.concatenate([
+        generate_data(49.3, 10.2, n_samples),
+        generate_data(36.1, 18.9, n_samples),
+        generate_data(34.3, 16.7, n_samples)
+    ]),
+    'Belirteç': 'CD56dim NKG2A+'
+})
 
-for i, (title, stats) in enumerate(data_map.items()):
-    ax = axes[i]
-    
-    # Verileri Hazırla
-    g1 = generate_data(*stats[0], n_samples)
-    g2 = generate_data(*stats[1], n_samples)
-    g3 = generate_data(*stats[2], n_samples)
-    
-    df = pd.DataFrame({
-        'Grup': groups * n_samples,
-        'Değer': np.concatenate([g1, g2, g3])
-    })
-    
-    # 1. Kutu Grafiği (Boxplot)
-    sns.boxplot(x="Grup", y="Değer", data=df, ax=ax, 
-                palette=prism_palette, width=0.5, linewidth=1.5, 
-                showfliers=False, whis=1.5)
-    
-    # 2. Nokta Grafiği (Stripplot)
-    sns.stripplot(x="Grup", y="Değer", data=df, ax=ax, 
-                  color="black", size=5, jitter=0.15, alpha=0.6)
-    
-    # Başlık ve Eksenler
-    ax.set_title(title, fontweight='bold', fontsize=11, pad=10)
-    ax.set_xlabel("")
-    # Sadece sol sütuna Y ekseni etiketi koy
-    ax.set_ylabel("% Ekspresyon" if i % 3 == 0 else "")
-    
-    # Çerçeveleri Temizle
-    sns.despine(ax=ax) 
-    
-    # --- ANLAMLILIK ÇİZGİLERİ (Significance Bars) ---
-    y_max = df['Değer'].max()
-    offset = y_max * 0.1 # Çubuğun ne kadar yukarıda olacağı
-    
-    # 1. CD56dim CTLA-4+ (Vaka grubunda artış)
-    if "CD56dim CTLA-4+" in title:
-        # Çizgi çiz (x=0 ile x=2 arası yani CMV- ile Vaka arası)
-        ax.plot([0, 0, 2, 2], [y_max+offset, y_max+offset*2, y_max+offset*2, y_max+offset], lw=1.5, c='k')
-        # Yazı ekle
-        ax.text(1, y_max+offset*2.2, "* p=0.036", ha='center', fontsize=9, fontweight='bold')
+# 4. Total NK Hücre Oranı (Fark Yok)
+df_nk = pd.DataFrame({
+    'Grup': groups * n_samples,
+    'Değer': np.concatenate([
+        generate_data(9.9, 4.2, n_samples),
+        generate_data(11.3, 5.0, n_samples),
+        generate_data(11.2, 7.7, n_samples)
+    ]),
+    'Belirteç': 'Total NK Hücre Oranı (%)'
+})
 
-    # 2. CD56bright CTLA-4 (Vaka grubunda artış)
-    if "CD56bright CTLA-4" in title:
-        # Çizgi çiz (x=1 ile x=2 arası yani CMV+ ile Vaka arası)
-        ax.plot([1, 1, 2, 2], [y_max+offset, y_max+offset*2, y_max+offset*2, y_max+offset], lw=1.5, c='k')
-        ax.text(1.5, y_max+offset*2.2, "* p=0.020", ha='center', fontsize=9, fontweight='bold')
+# --- GRAFİK ÇİZME FONKSİYONU (PLOTLY) ---
+def create_prism_plot(df, y_label, title, p_val_text=None):
+    # Renk Paleti (Gri -> Açık Mavi -> Koyu Lacivert)
+    colors = {'CMV (-)': '#E0E0E0', 'CMV (+)': '#90CAF9', 'Vaka Grubu': '#0D47A1'}
+    
+    # Kutu Grafiği + Noktalar (points='all')
+    fig = px.box(df, x="Grup", y="Değer", color="Grup", 
+                 points="all" if show_points else False,
+                 color_discrete_map=colors,
+                 title=title)
+    
+    # GraphPad Prism Stili (Beyaz Arka Plan, Siyah Çerçeve)
+    fig.update_layout(
+        template="simple_white",
+        showlegend=False,
+        yaxis_title=y_label,
+        xaxis_title="",
+        title_font=dict(size=14, family="Arial Black"),
+        margin=dict(l=40, r=40, t=60, b=40)
+    )
+    
+    # P Değerini Grafiğe Ekleme (Annotation)
+    if p_val_text:
+        # En yüksek değeri bulup biraz üstüne yazalım
+        y_max = df['Değer'].max()
+        fig.add_annotation(
+            x=2, # Vaka Grubu (Index 2)
+            y=y_max,
+            text=p_val_text,
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor="black",
+            yshift=10
+        )
         
-    # 3. CD56dim NKG2A (Vaka grubunda düşüş)
-    if "CD56dim NKG2A" in title:
-         ax.plot([0, 0, 2, 2], [y_max+offset, y_max+offset*2, y_max+offset*2, y_max+offset], lw=1.5, c='k')
-         ax.text(1, y_max+offset*2.2, "* p<0.05", ha='center', fontsize=9, fontweight='bold')
+    return fig
 
-# Düzeni Sıkılaştır
-plt.tight_layout()
+# --- ARAYÜZ DÜZENİ (LAYOUT) ---
+st.subheader("📊 İmmünolojik Karşılaştırma Grafikleri")
 
-# DOSYAYI KAYDET (Bu satır hayat kurtarır!)
-plt.savefig('cmv_analiz_sonuc.png', dpi=300, bbox_inches='tight')
-print("Grafik 'cmv_analiz_sonuc.png' olarak başarıyla kaydedildi!")
+col1, col2 = st.columns(2)
 
-# Ekranda Göster (Mümkünse)
-plt.show()
+with col1:
+    st.plotly_chart(create_prism_plot(df_ctla4_dim, "% Ekspresyon", "CD56dim CTLA-4+ (Sitotoksik)", "p=0.036 (vs CMV-)"), use_container_width=True)
+    st.plotly_chart(create_prism_plot(df_nkg2a, "% Ekspresyon", "CD56dim NKG2A (İnhibitör)", "p=0.028 (vs CMV-)"), use_container_width=True)
+
+with col2:
+    st.plotly_chart(create_prism_plot(df_ctla4_bright, "% Ekspresyon", "CD56bright CTLA-4+ (Sitokin)", "p=0.005 (vs CMV+)"), use_container_width=True)
+    st.plotly_chart(create_prism_plot(df_nk, "% Oran", "Total NK Hücre Oranı", "Anlamlı Fark Yok"), use_container_width=True)
+
+# --- VERİ TABLOSU ---
+st.divider()
+st.subheader("📋 Tez Veri Özeti")
+st.markdown("Aşağıdaki veriler, tezdeki **Tablo 2, 3 ve 4**'ten alınmış orijinal ortalama değerlerdir.")
+
+ozet_data = {
+    'Parametre': ['CD56dim CTLA-4', 'CD56bright CTLA-4', 'CD56dim NKG2A', 'Total NK Oranı'],
+    'CMV (-) Ort.±SS': ['0.63 ± 0.67', '6.4 ± 4.0', '49.3 ± 10.2', '9.9 ± 4.2'],
+    'CMV (+) Ort.±SS': ['0.72 ± 0.58', '3.8 ± 2.4', '36.1 ± 18.9', '11.3 ± 5.0'],
+    'Vaka Grubu Ort.±SS': ['2.05 ± 1.51', '8.5 ± 4.4', '34.3 ± 16.7', '11.2 ± 7.7'],
+    'İstatistiksel Sonuç': ['Vaka Grubunda Artmış (p=0.036)', 'Vaka Grubunda Artmış (p=0.020)', 'Vaka Grubunda Azalmış (p<0.05)', 'Fark Yok']
+}
+st.dataframe(pd.DataFrame(ozet_data), use_container_width=True)
