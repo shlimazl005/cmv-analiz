@@ -29,7 +29,7 @@ def generate_data(mean, sd, n):
 # --- DATASETLERİN HAZIRLANMASI (Tez Verileri) ---
 groups = ['CMV (-)', 'CMV (+)', 'Vaka Grubu']
 
-# 1. CD56dim CTLA-4+ (Vaka grubunda Yüksek)
+# 1. CD56dim CTLA-4+ (Vaka grubunda Yüksek - Tablo 3)
 df_ctla4_dim = pd.DataFrame({
     'Grup': groups * n_samples,
     'Değer': np.concatenate([
@@ -40,7 +40,7 @@ df_ctla4_dim = pd.DataFrame({
     'Belirteç': 'CD56dim CTLA-4+'
 })
 
-# 2. CD56bright CTLA-4+ (Vaka grubunda Yüksek)
+# 2. CD56bright CTLA-4+ (Vaka grubunda Yüksek - Tablo 4)
 df_ctla4_bright = pd.DataFrame({
     'Grup': groups * n_samples,
     'Değer': np.concatenate([
@@ -51,7 +51,7 @@ df_ctla4_bright = pd.DataFrame({
     'Belirteç': 'CD56bright CTLA-4+'
 })
 
-# 3. CD56dim NKG2A (Vaka grubunda Düşük)
+# 3. CD56dim NKG2A (Vaka grubunda Düşük - Tablo 3)
 df_nkg2a = pd.DataFrame({
     'Grup': groups * n_samples,
     'Değer': np.concatenate([
@@ -62,7 +62,7 @@ df_nkg2a = pd.DataFrame({
     'Belirteç': 'CD56dim NKG2A+'
 })
 
-# 4. Total NK Hücre Oranı (Fark Yok)
+# 4. Total NK Hücre Oranı (Fark Yok - Tablo 2)
 df_nk = pd.DataFrame({
     'Grup': groups * n_samples,
     'Değer': np.concatenate([
